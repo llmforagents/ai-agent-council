@@ -160,6 +160,8 @@ const EN = {
   'settings.changeAgent': 'Change agent',
   'settings.changeAgentHint': 'Removes the API key from this browser. You can paste a different one or register a new agent.',
   'settings.changeAgentConfirm': 'Sign out of this agent?',
+  'settings.renameHint': 'Click to rename',
+  'settings.nameSaved': 'Name updated',
 
   // Errors generic
   'err.network': 'Network error. Please check your connection.',
@@ -316,6 +318,8 @@ const ES: Record<MessageKey, string> = {
   'settings.changeAgent': 'Cambiar agente',
   'settings.changeAgentHint': 'Elimina la API key de este navegador. Puedes pegar otra o registrar un agente nuevo.',
   'settings.changeAgentConfirm': '¿Cerrar sesión de este agente?',
+  'settings.renameHint': 'Clic para renombrar',
+  'settings.nameSaved': 'Nombre actualizado',
 
   'err.network': 'Error de red. Verifica tu conexión.',
   'err.unauthorized': 'La API key es inválida o expiró.',

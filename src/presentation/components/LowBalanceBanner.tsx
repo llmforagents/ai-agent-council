@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useT } from '@/presentation/hooks/useT'
 import { useBalance } from '@/presentation/hooks/useBalance'
 
@@ -7,6 +7,9 @@ const LOW_THRESHOLD_CENTS = 20
 export function LowBalanceBanner() {
   const t = useT()
   const balance = useBalance()
+  const loc = useLocation()
+  // The wallet route is the place users land to top up — don't double-message.
+  if (loc.pathname.startsWith('/wallet')) return null
   if (!balance.data) return null
   const cents = balance.data.availableUsdCents
   if (cents > LOW_THRESHOLD_CENTS) return null

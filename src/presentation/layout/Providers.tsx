@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/presentation/components/ui/sonner'
+import { ThemeEffect } from '@/presentation/components/ThemeEffect'
 import { AppContainerContext } from '@/presentation/hooks/useAppContainer'
 import { composeApp } from '@/composition/root'
 
@@ -32,6 +33,7 @@ export function Providers({ children }: { children: ReactNode }) {
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <AppContainerContext.Provider value={container}>
+          <ThemeEffect />
           {children}
           <Toaster position="bottom-right" richColors />
         </AppContainerContext.Provider>

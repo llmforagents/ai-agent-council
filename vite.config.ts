@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
       port: 4302,
       strictPort: true,
       host: true,
+      allowedHosts: ['skywalker'],
       proxy: {
         '/proxy/api': {
           target: env.VITE_API_BASE ?? 'https://api.llm4agents.com',
@@ -22,6 +23,6 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    preview: { port: 4312, strictPort: true, host: true },
+    preview: { port: 4312, strictPort: true, host: true, allowedHosts: ['skywalker'] },
   }
 })

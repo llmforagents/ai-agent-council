@@ -126,6 +126,7 @@
   }
   html, body {
     @apply bg-background text-foreground;
+    min-height: 100vh;
   }
   html {
     @apply font-sans;
@@ -139,6 +140,9 @@
     background-size: 20px 20px;
     background-position: 0 0;
     background-attachment: fixed;
+  }
+  #root {
+    min-height: 100vh;
   }
 }
 

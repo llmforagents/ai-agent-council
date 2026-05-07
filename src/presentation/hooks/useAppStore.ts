@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { detectLocale, type Locale } from '@/domain/i18n'
+import type { Locale } from '@/domain/i18n'
 import type { Agent } from '@/domain/agent'
 import { AgentId, ApiKey } from '@/domain/branded'
 
@@ -29,7 +29,7 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       agent: null,
       theme: 'dark',
-      locale: detectLocale(),
+      locale: 'en',
       setAgent: (agent) => set({ agent }),
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),

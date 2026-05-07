@@ -22,7 +22,7 @@ const EN = {
   'common.refresh': 'Refresh',
 
   // App
-  'app.title': 'LLM Council',
+  'app.title': 'LLM4Agents',
   'app.subtitle': 'Three drafters, cross-debate, one chairman synthesises the final answer.',
 
   // Topbar
@@ -36,7 +36,7 @@ const EN = {
   'topbar.wallet': 'Wallet',
 
   // Onboarding
-  'onb.welcome.title': 'Welcome to the LLM Council',
+  'onb.welcome.title': 'Welcome to LLM4Agents Council',
   'onb.welcome.body': 'Run three frontier models in parallel against the same task, have them debate each other, and let a chairman synthesise the final answer with its reasoning. Pay-per-call against your llm4agents.com agent.',
   'onb.hasAgent.title': 'Do you already have an agent on llm4agents.com?',
   'onb.hasAgent.yes': 'Yes, I have an API key',
@@ -159,7 +159,7 @@ const ES: Record<MessageKey, string> = {
   'common.delete': 'Eliminar',
   'common.refresh': 'Actualizar',
 
-  'app.title': 'Concejo de LLMs',
+  'app.title': 'LLM4Agents',
   'app.subtitle': 'Tres redactores, debate cruzado, y un chairman sintetiza la respuesta final.',
 
   'topbar.balance': 'Saldo',
@@ -171,7 +171,7 @@ const ES: Record<MessageKey, string> = {
   'topbar.council': 'Concejo',
   'topbar.wallet': 'Wallet',
 
-  'onb.welcome.title': 'Bienvenido al Concejo de LLMs',
+  'onb.welcome.title': 'Bienvenido al Concejo LLM4Agents',
   'onb.welcome.body': 'Ejecuta tres modelos frontier en paralelo sobre la misma tarea, hazlos debatir entre ellos y deja que un chairman sintetice la respuesta final con su razonamiento. Pago por llamada contra tu agente de llm4agents.com.',
   'onb.hasAgent.title': '¿Ya tienes un agente en llm4agents.com?',
   'onb.hasAgent.yes': 'Sí, tengo una API key',

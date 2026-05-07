@@ -12,6 +12,10 @@ import type {
   GenerateWalletRequest,
   GenerateWalletResponse,
   ChatResponseMeta,
+  ListTransactionsRequest,
+  TransactionsResponse,
+  TransactionInfo,
+  TransactionType,
 } from '@/application/ports'
 import { createSdkClient } from './sdkClient'
 
@@ -29,6 +33,7 @@ export class RestApiClient implements RestApiPort {
     try {
       const r = await sdk.wallets.balance()
       return Ok({
+        uuid: r.uuid,
         availableUsdCents: r.availableUsdCents,
         totalDepositedUsd: typeof r.totalDepositedUsd === 'number' ? r.totalDepositedUsd : Number(r.totalDepositedUsd ?? 0),
         totalSpentUsd: typeof r.totalSpentUsd === 'number' ? r.totalSpentUsd : Number(r.totalSpentUsd ?? 0),
@@ -71,6 +76,43 @@ export class RestApiClient implements RestApiPort {
         token: r.token as 'USDT' | 'USDC',
         address: r.address,
         createdAt: r.createdAt,
+      })
+    } catch (e) {
+      return Err(translateError(e))
+    }
+  }
+
+  async listTransactions(key: ApiKey, req: ListTransactionsRequest): Promise<Result<TransactionsResponse, RestError>> {
+    const sdk = createSdkClient(key, { baseUrl: this.apiBase })
+    try {
+      const filter: Parameters<typeof sdk.wallets.transactions>[0] = {
+        ...(req.type !== undefined ? { type: req.type } : {}),
+        ...(req.limit !== undefined ? { limit: req.limit } : {}),
+        ...(req.offset !== undefined ? { offset: req.offset } : {}),
+      }
+      const r = await sdk.wallets.transactions(filter)
+      const transactions: ReadonlyArray<TransactionInfo> = r.transactions.map((tx) => {
+        const out: { id: string; type: TransactionType; amountCents: number; timestamp: string; description?: string; model?: string; promptTokens?: number; completionTokens?: number; totalTokens?: number; chain?: string; txHash?: string } = {
+          id: String(tx.id),
+          type: normalizeTxType(tx.type),
+          amountCents: tx.amountUsdCents,
+          timestamp: tx.createdAt,
+        }
+        if (tx.description) out.description = tx.description
+        if (tx.model) out.model = tx.model
+        if (tx.promptTokens !== null && tx.promptTokens !== undefined) out.promptTokens = tx.promptTokens
+        if (tx.completionTokens !== null && tx.completionTokens !== undefined) out.completionTokens = tx.completionTokens
+        if (tx.totalTokens !== null && tx.totalTokens !== undefined) out.totalTokens = tx.totalTokens
+        if (tx.chain) out.chain = tx.chain
+        if (tx.txHash) out.txHash = tx.txHash
+        return out
+      })
+      return Ok({
+        transactions,
+        total: r.total,
+        limit: r.limit,
+        offset: r.offset,
+        ...(r.requestId ? { requestId: r.requestId } : {}),
       })
     } catch (e) {
       return Err(translateError(e))
@@ -151,6 +193,11 @@ export class RestApiClient implements RestApiPort {
       clearTimeout(timer)
     }
   }
+}
+
+function normalizeTxType(t: string): TransactionType {
+  if (t === 'deposit' || t === 'usage' || t === 'refund') return t
+  return 'usage'
 }
 
 function translateError(e: unknown): RestError {

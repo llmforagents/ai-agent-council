@@ -34,6 +34,7 @@ export type RegisterAgentResponse = Readonly<{
 }>
 
 export type BalanceResponse = Readonly<{
+  uuid: string
   availableUsdCents: number
   totalDepositedUsd: number
   totalSpentUsd: number
@@ -62,11 +63,42 @@ export type GenerateWalletResponse = Readonly<{
   createdAt: string
 }>
 
+export type TransactionType = 'deposit' | 'usage' | 'refund'
+
+export type TransactionInfo = Readonly<{
+  id: string
+  type: TransactionType
+  amountCents: number
+  timestamp: string
+  description?: string
+  model?: string
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  chain?: string
+  txHash?: string
+}>
+
+export type ListTransactionsRequest = Readonly<{
+  type?: TransactionType
+  limit?: number
+  offset?: number
+}>
+
+export type TransactionsResponse = Readonly<{
+  transactions: ReadonlyArray<TransactionInfo>
+  total: number
+  limit: number
+  offset: number
+  requestId?: string
+}>
+
 export interface RestApiPort {
   registerAgent(req: RegisterAgentRequest): Promise<Result<RegisterAgentResponse, RestError>>
   getBalance(key: ApiKey): Promise<Result<BalanceResponse, RestError>>
   listModels(key: ApiKey, search?: string): Promise<Result<ModelsResponse, RestError>>
   generateWallet(key: ApiKey, req: GenerateWalletRequest): Promise<Result<GenerateWalletResponse, RestError>>
+  listTransactions(key: ApiKey, req: ListTransactionsRequest): Promise<Result<TransactionsResponse, RestError>>
   chatCompletionStream(
     key: ApiKey, req: ChatCompletionRequest, signal: AbortSignal, timeoutMs?: number,
   ): AsyncGenerator<ChatStreamChunk, void, void>

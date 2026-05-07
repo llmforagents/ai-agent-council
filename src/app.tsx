@@ -5,6 +5,7 @@ import { Council } from '@/presentation/routes/Council'
 import { Onboarding } from '@/presentation/routes/Onboarding'
 import { Settings } from '@/presentation/routes/Settings'
 import { Wallet } from '@/presentation/routes/Wallet'
+import { Transactions } from '@/presentation/routes/Transactions'
 import { useActiveAgent } from '@/presentation/hooks/useActiveAgent'
 import type { ReactNode } from 'react'
 
@@ -26,6 +27,14 @@ export function App() {
           element={
             <RequireAgent>
               <AppShell><Wallet /></AppShell>
+            </RequireAgent>
+          }
+        />
+        <Route
+          path="/transactions"
+          element={
+            <RequireAgent>
+              <AppShell><Transactions /></AppShell>
             </RequireAgent>
           }
         />

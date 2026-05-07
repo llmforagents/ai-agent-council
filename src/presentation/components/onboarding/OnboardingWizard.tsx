@@ -1,9 +1,11 @@
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
 import { useT } from '@/presentation/hooks/useT'
 import { useAppContainer } from '@/presentation/hooks/useAppContainer'
 import { useAppStore } from '@/presentation/hooks/useAppStore'
+import { useWalletStore } from '@/presentation/hooks/useWalletStore'
 import { ApiKey, AgentId } from '@/domain/branded'
 import { Card } from '@/presentation/components/ui/card'
 import { Button } from '@/presentation/components/ui/button'
@@ -14,7 +16,21 @@ type Step = 'welcome' | 'has-agent' | 'enter-key' | 'register' | 'fund'
 
 export function OnboardingWizard() {
   const t = useT()
+  const navigate = useNavigate()
   const [step, setStep] = useState<Step>('welcome')
+
+  const handleKeyValidated = useCallback(
+    (availableUsdCents: number) => {
+      // Skip funding when the imported agent already has balance — they don't
+      // need a deposit address, drop them straight into the council.
+      if (availableUsdCents > 0) {
+        void navigate('/council')
+      } else {
+        setStep('fund')
+      }
+    },
+    [navigate],
+  )
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 space-y-6">
@@ -41,28 +57,31 @@ export function OnboardingWizard() {
         </Card>
       )}
 
-      {step === 'enter-key' && <KeyEntry onValid={() => setStep('fund')} onBack={() => setStep('has-agent')} />}
+      {step === 'enter-key' && <KeyEntry onValid={handleKeyValidated} onBack={() => setStep('has-agent')} />}
       {step === 'register' && <RegisterAgent onCreated={() => setStep('fund')} onBack={() => setStep('has-agent')} />}
       {step === 'fund' && <FundingGuide />}
     </div>
   )
 }
 
-function KeyEntry({ onValid, onBack }: { onValid: () => void; onBack: () => void }) {
+function KeyEntry({ onValid, onBack }: { onValid: (availableUsdCents: number) => void; onBack: () => void }) {
   const t = useT()
   const { rest } = useAppContainer()
   const setAgent = useAppStore((s) => s.setAgent)
+  const qc = useQueryClient()
   const [keyInput, setKeyInput] = useState('')
+  const [nameInput, setNameInput] = useState('')
   const [validating, setValidating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleValidate = useCallback(async () => {
-    const trimmed = keyInput.trim()
-    if (!trimmed) return
+    const trimmedKey = keyInput.trim()
+    const trimmedName = nameInput.trim()
+    if (!trimmedKey || !trimmedName) return
     setValidating(true)
     setError(null)
     try {
-      const apiKey = ApiKey(trimmed)
+      const apiKey = ApiKey(trimmedKey)
       const res = await rest.getBalance(apiKey)
       if (!res.ok) {
         if (res.error.kind === 'unauthorized') setError(t('onb.key.invalid'))
@@ -70,24 +89,26 @@ function KeyEntry({ onValid, onBack }: { onValid: () => void; onBack: () => void
         else setError(t('err.unknown'))
         return
       }
-      // Key works. We don't have agent metadata from /balance directly;
-      // synthesise a placeholder Agent record (id = synthetic UUID) and let
-      // the Settings page surface the actual data the user already knows.
-      const placeholderId = AgentId(syntheticUuid())
+      // Use the real agent uuid returned by /balance so persisted state
+      // (wallets, history) keys correctly when the same agent is re-imported.
+      const agentId = AgentId(res.value.uuid)
       setAgent({
-        id: placeholderId,
-        name: 'Imported agent',
+        id: agentId,
+        name: trimmedName,
         apiKey,
         createdAt: new Date(),
       })
+      qc.setQueryData(['balance', agentId], res.value)
       toast.success(t('onb.key.validate'))
-      onValid()
+      onValid(res.value.availableUsdCents)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setValidating(false)
     }
-  }, [keyInput, rest, setAgent, t, onValid])
+  }, [keyInput, nameInput, rest, setAgent, qc, t, onValid])
+
+  const canSubmit = !!(keyInput.trim() && nameInput.trim()) && !validating
 
   return (
     <Card className="p-6 sm:p-8 space-y-4">
@@ -106,10 +127,22 @@ function KeyEntry({ onValid, onBack }: { onValid: () => void; onBack: () => void
           disabled={validating}
         />
       </div>
+      <div className="space-y-2">
+        <Label htmlFor="onb-key-name">{t('onb.key.nameLabel')}</Label>
+        <Input
+          id="onb-key-name"
+          value={nameInput}
+          onChange={(e) => setNameInput(e.target.value)}
+          placeholder={t('onb.key.namePlaceholder')}
+          disabled={validating}
+          onKeyDown={(e) => { if (e.key === 'Enter' && canSubmit) void handleValidate() }}
+        />
+        <p className="text-xs text-muted-foreground">{t('onb.key.nameHint')}</p>
+      </div>
       {error ? <div className="text-xs text-destructive">{error}</div> : null}
       <div className="flex items-center justify-between pt-2">
         <button onClick={onBack} className="text-xs text-muted-foreground hover:underline">{t('common.back')}</button>
-        <Button onClick={handleValidate} disabled={!keyInput.trim() || validating}>
+        <Button onClick={handleValidate} disabled={!canSubmit}>
           {validating ? t('onb.key.validating') : t('onb.key.validate')}
         </Button>
       </div>
@@ -183,6 +216,7 @@ function FundingGuide() {
   const { rest } = useAppContainer()
   const navigate = useNavigate()
   const agent = useAppStore((s) => s.agent)
+  const upsertWallet = useWalletStore((s) => s.upsert)
   const [generating, setGenerating] = useState(false)
   const [address, setAddress] = useState<string | null>(null)
   const [balanceCents, setBalanceCents] = useState<number | null>(null)
@@ -194,6 +228,12 @@ function FundingGuide() {
       const res = await rest.generateWallet(agent.apiKey, { chain: 'solana', token: 'USDC' })
       if (res.ok) {
         setAddress(res.value.address)
+        upsertWallet(agent.id, {
+          chain: res.value.chain,
+          token: res.value.token,
+          address: res.value.address,
+          createdAt: res.value.createdAt,
+        })
         toast.success('Address ready')
       } else {
         toast.error(t('err.unknown'))
@@ -201,7 +241,7 @@ function FundingGuide() {
     } finally {
       setGenerating(false)
     }
-  }, [agent, rest, t])
+  }, [agent, rest, upsertWallet, t])
 
   const handleRefreshBalance = useCallback(async () => {
     if (!agent) return
@@ -260,7 +300,3 @@ function FundingGuide() {
   )
 }
 
-function syntheticUuid(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
-  return '00000000-0000-4000-8000-000000000000'
-}

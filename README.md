@@ -1,93 +1,109 @@
-# Council Llm4agents
+# council-llm4agents
 
+Standalone web app for the **LLM Council** — three frontier models answer the same task in parallel, debate each other across N rounds (anonymised), and a chairman synthesises the final answer with its reasoning. Pay-per-call against your llm4agents.com agent balance.
 
+Extracted from the [`playground-llm4agents`](https://gitlab008.coinradar.co/proxy-llm/playground-llm4agents) Council route into its own deployable. Same backend, simpler scope.
 
-## Getting started
+## Features
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+- 3 plan presets: **🪶 Lite** (~$0.01/run), **⚡ Pro** (~$0.20/run), **🚀 Power** (~$0.60/run) with frontier models.
+- **2–5 debate rounds** configurable per run.
+- Per-slot model override via picker (309+ models).
+- **Streaming** drafts, debates and synthesis token-by-token.
+- **Chairman reasoning toggle** — see why the chairman picked what it picked.
+- **History** of last 5 runs per plan, per agent, persisted in localStorage.
+- **Onboarding wizard**: bring your own API key OR register a new agent inline + funding guide.
+- Bilingual UI (EN / ES neutral Latin American).
+- **Real billed cost** reported via balance diff (not SDK estimate).
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Stack
 
-## Add your files
+- React 19 + Vite 8 + TypeScript ~6 (strict + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`)
+- Tailwind v4 + shadcn primitives
+- Zustand (state, persisted to localStorage) + TanStack Query (balance/models)
+- `@llmforagents/sdk@2.3.2` for backend calls
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+## Requirements
+
+- Node 20+
+- Access to `https://api.llm4agents.com`
+- An llm4agents.com agent (the app helps you create one if you don't have it)
+
+## Quick start
+
+```bash
+npm install
+npm run dev      # http://localhost:4302
+```
+
+The dev server proxies `/proxy/api` → `https://api.llm4agents.com` to avoid CORS. In production the SDK hits the API directly.
+
+## Scripts
+
+- `npm run dev` — Vite dev server on port 4302.
+- `npm run build` — `tsc --noEmit && vite build`.
+- `npm run preview` — serve `dist/` on port 4312.
+- `npm test` — Vitest watch.
+- `npm run test:ci` — Vitest single run (28 tests).
+- `npm run typecheck` — `tsc --noEmit`.
+- `npm run lint` — ESLint (`no-floating-promises` and `no-explicit-any` are errors).
+
+## Architecture
+
+Clean Architecture (4 layers):
 
 ```
-cd existing_repo
-git remote add origin https://gitlab008.coinradar.co/proxy-llm/council-llm4agents.git
-git branch -M main
-git push -uf origin main
+src/
+├── domain/         types & branded values (Model, ApiKey, AgentId, UsdCents)
+│                   council config, events, prompts (no IO)
+├── application/    runCouncilChat orchestrator + prompt builders
+│                   ports: RestApiPort
+├── infrastructure/ RestApiClient + sdkClient (5 min timeout)
+└── presentation/   routes / components / hooks (React)
+    composition/    DI: composeApp(env) → AppContainer
 ```
 
-## Integrate with your tools
+Key invariants kept identical to the playground:
 
-- [ ] [Set up project integrations](https://gitlab008.coinradar.co/proxy-llm/council-llm4agents/-/settings/integrations)
+- `MAX_DEBATE_ROUNDS = 5`, `MIN_DEBATE_ROUNDS = 2`.
+- Per-call hard timeout: 5 min. Per-call **idle** timeout: 60 s of silence = abort.
+- The SDK's per-chunk cost ignores backend minimums and fees, so the council reports the **billed total via balance diff** (`balanceBefore − balanceAfter`) on the `council_done` event.
+- Chairman emits `===COUNCIL_REASONING===` marker; UI splits inline during streaming so the marker never reaches the answer card.
+- Snapshots persisted to localStorage drop `*_delta` events (~18× storage reduction).
+- Cap of 5 runs per plan (15 total per agent).
 
-## Collaborate with your team
+## Deploy
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+Cloudflare Pages via `wrangler.toml`:
 
-## Test and Deploy
+```bash
+npm run build
+npx wrangler pages deploy dist/
+```
 
-Use the built-in continuous integration in GitLab.
+Set `VITE_API_BASE` only if you want to point at a non-prod backend. Defaults to `https://api.llm4agents.com`.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+## Onboarding flow
 
-***
+1. **Welcome** — single screen with title + body + "Next".
+2. **¿Tienes agente?** — two buttons.
+3a. **Sí**: paste API key, the wizard hits `GET /v1/wallets/balance` to validate before storing.
+3b. **No**: ask for a name, hit `POST /api/v1/agents/register`, store the returned `apiKey + uuid`.
+4. **Funding** — generate a Solana USDC deposit address, copy, refresh balance, continue.
+5. → `/council`.
 
-# Editing this README
+Settings has a **"Cambiar agente"** action that wipes the stored key and bounces you back to onboarding.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Difference vs the playground's `/council` route
 
-## Suggestions for a good README
+This app is a strict subset:
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+- Single-agent (no agent switcher; sign out + back in to change).
+- No `/transactions`, `/scrapers`, `/search`, `/images`, `/chat`. Only the council, plus a minimal Wallet and Settings.
+- No Dexie/IndexedDB; everything lives in `localStorage`.
+- No `/agents` UI — registration is handled inside onboarding.
+- The shared logic of the council itself (`runCouncilChat`, prompts, store, stream hook) is a copy of the playground's, kept feature-equivalent.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Internal.

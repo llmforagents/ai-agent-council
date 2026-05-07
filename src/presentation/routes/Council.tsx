@@ -27,10 +27,14 @@ export function Council() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-bold">{t('council.title')}</h1>
-        <p className="text-sm text-muted-foreground">{t('council.subtitle')}</p>
-      </header>
+      <Card className="p-6 flex flex-col items-center text-center gap-2 bg-gradient-to-br from-primary/10 to-transparent border-primary/20">
+        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+          {t('settings.activeAgent')}
+        </div>
+        <div className="text-xl sm:text-2xl font-bold break-all">{agent.name}</div>
+        <h1 className="text-2xl sm:text-3xl font-bold mt-1">{t('council.title')}</h1>
+        <p className="text-sm text-muted-foreground max-w-2xl">{t('council.subtitle')}</p>
+      </Card>
 
       {showSetup ? (
         <Card className="p-6">

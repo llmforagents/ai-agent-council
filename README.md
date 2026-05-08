@@ -1,13 +1,11 @@
-# council-llm4agents
+# ai-agent-council
 
-Standalone web app for the **LLM Council** — three frontier models answer the same task in parallel, debate each other across N rounds (anonymised), and a chairman synthesises the final answer with its reasoning. Pay-per-call against your llm4agents.com agent balance.
-
-Extracted from the [`playground-llm4agents`](https://gitlab008.coinradar.co/proxy-llm/playground-llm4agents) Council route into its own deployable. Same backend, simpler scope.
+Standalone web app for the **LLM Council** — three frontier models answer the same task in parallel, debate each other across N rounds (anonymised), and a chairman synthesises the final answer with its reasoning. Pay-per-call against your [llm4agents.com](https://llm4agents.com) agent balance.
 
 ## Features
 
-- 3 plan presets: **🪶 Lite** (~$0.01/run), **⚡ Pro** (~$0.20/run), **🚀 Power** (~$0.60/run) with frontier models.
-- **2–5 debate rounds** configurable per run.
+- 3 plan presets: **🪶 Lite** (~$0.02/run), **⚡ Pro** (~$0.45/run), **🚀 Power** (~$2.20/run) with frontier models.
+- **2–5 debate rounds** configurable per run (defaults: Lite 2, Pro 3, Power 4).
 - Per-slot model override via picker (309+ models).
 - **Streaming** drafts, debates and synthesis token-by-token.
 - **Chairman reasoning toggle** — see why the chairman picked what it picked.
@@ -87,8 +85,8 @@ Set `VITE_API_BASE` only if you want to point at a non-prod backend. Defaults to
 
 1. **Welcome** — single screen with title + body + "Next".
 2. **¿Tienes agente?** — two buttons.
-3a. **Sí**: paste API key, the wizard hits `GET /v1/wallets/balance` to validate before storing.
-3b. **No**: ask for a name, hit `POST /api/v1/agents/register`, store the returned `apiKey + uuid`.
+3a. **Sí**: paste API key, the wizard hits `GET /v1/wallets/balance` to validate before storing. If the agent already has a balance, funding is skipped and you go straight to `/council`.
+3b. **No**: ask for a name, hit `POST /api/v1/agents/register`, store the returned `apiKey + uuid`, then move to funding.
 4. **Funding** — generate a Solana USDC deposit address, copy, refresh balance, continue.
 5. → `/council`.
 
@@ -99,11 +97,11 @@ Settings has a **"Cambiar agente"** action that wipes the stored key and bounces
 This app is a strict subset:
 
 - Single-agent (no agent switcher; sign out + back in to change).
-- No `/transactions`, `/scrapers`, `/search`, `/images`, `/chat`. Only the council, plus a minimal Wallet and Settings.
+- No `/scrapers`, `/search`, `/images`, `/chat`. Only the council, plus a minimal Wallet, Transactions and Settings.
 - No Dexie/IndexedDB; everything lives in `localStorage`.
 - No `/agents` UI — registration is handled inside onboarding.
 - The shared logic of the council itself (`runCouncilChat`, prompts, store, stream hook) is a copy of the playground's, kept feature-equivalent.
 
 ## License
 
-Internal.
+Apache-2.0. See [`LICENSE`](./LICENSE).

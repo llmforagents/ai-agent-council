@@ -1,10 +1,45 @@
-# ai-agent-council
+<h1 align="center">🏛️ AI Agent Council</h1>
 
-Standalone web app for the **LLM Council** — three frontier models answer the same task in parallel, debate each other across N rounds (anonymised), and a chairman synthesises the final answer with its reasoning. Pay-per-call against your [llm4agents.com](https://llm4agents.com) agent balance.
+<p align="center">
+  <strong>Three frontier LLMs debate. One chairman synthesises. You get a sharper answer than any single model produces alone.</strong>
+</p>
+
+<p align="center">
+  <em>Powered by <a href="https://llm4agents.com">llm4agents.com</a> — pay-per-call against your agent balance.</em>
+</p>
+
+---
+
+## Why a council instead of one model?
+
+A single LLM bakes its blind spots into the answer. Council runs three frontier models on the same task in parallel, has them **debate each other anonymously** across N rounds, and a chairman synthesises the final answer with its reasoning.
+
+Disagreements surface, weak arguments get pruned, and the consensus you see is one all three models had to defend — not one model's confidence theatre. The chairman doesn't just pick a winner: it folds in the points the debate forced into the open. You consistently end up with **agreements grounded in evidence and new angles a single model would have skipped**.
+
+Use it when the answer matters more than the latency, when a single model would paper over real trade-offs, or when you want to *see* where the strongest minds disagree before you decide.
+
+## Example prompts
+
+Try these to feel the difference between a single-model answer and a debated one. Each one is the kind of question where three perspectives produce something stronger than any one model on its own.
+
+### 🏗️ System architecture
+> Recommend a database stack for a fintech platform that needs 99.99% uptime, strict consistency, and 50k writes/second. Compare PostgreSQL with sharding, CockroachDB, and managed DynamoDB. Cover ops cost, vendor lock-in, and the realistic migration path if we outgrow the choice.
+
+### 📈 Strategic business decision
+> I run a 15-person B2B SaaS at $1.2M ARR with 18 months of runway. Should I raise a Series A in a tough market, or push for default-alive profitability first? Pressure-test the assumptions behind each path and give me the conditions under which each one becomes the wrong call.
+
+### 🛡️ Security & code review
+> Audit the authentication flow below for subtle vulnerabilities — race conditions, token leakage, timing attacks, replay surface. Rank findings by realistic exploitability rather than CVSS theatre, and propose the minimal patch set. [paste code]
+
+### 🩺 Health trade-off framing
+> I'm 38, sedentary, BMI 29, recently diagnosed with prediabetes. Lay out the case for (a) low-carb / keto, (b) Mediterranean diet + cardio, (c) GLP-1 + behavioural coaching. Weigh 12-month efficacy, sustainability, and side effects, and end with a decision framework — not a single recommendation.
+
+### 👥 Hiring under uncertainty
+> We have two finalists for VP Engineering: a brilliant 10x IC who has never managed, and a competent manager from a slower-moving company. Steelman each hire, then surface the failure modes our specific team would tolerate worst. Settle on the questions to ask in a final round to break the tie.
 
 ## Features
 
-- 3 plan presets: **🪶 Lite** (~$0.02/run), **⚡ Pro** (~$0.45/run), **🚀 Power** (~$2.20/run) with frontier models.
+- 3 plan presets: **🪶 Lite** (≈$0.02/run), **⚡ Pro** (≈$0.45/run), **🚀 Power** (≈$2.20/run) with frontier models.
 - **2–5 debate rounds** configurable per run (defaults: Lite 2, Pro 3, Power 4).
 - Per-slot model override via picker (309+ models).
 - **Streaming** drafts, debates and synthesis token-by-token.

@@ -51,9 +51,9 @@ export const COUNCIL_PLANS: Readonly<Record<CouncilPlan, CouncilConfig>> = {
   },
   pro: {
     drafters: [
-      Model('google/gemini-2.5-flash'),
-      Model('anthropic/claude-haiku-4.5'),
-      Model('openai/gpt-5-chat'),
+      Model('deepseek/deepseek-v4-pro'),
+      Model('z-ai/glm-5.1'),
+      Model('moonshotai/kimi-k2.6'),
     ],
     chairman: Model('anthropic/claude-sonnet-4.6'),
     debateRounds: PLAN_DEFAULT_ROUNDS.pro,

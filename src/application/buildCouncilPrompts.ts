@@ -5,7 +5,11 @@ export type ChatMessage = Readonly<{
   content: string
 }>
 
-const DRAFTER_SYSTEM = `You are one of three independent expert drafters in a council.
+const LANGUAGE_DIRECTIVE = `LANGUAGE: Reply in the same natural language as the user's task. If the user wrote in Spanish, answer in Spanish; in French, French; in Portuguese, Portuguese; in Japanese, Japanese; etc. This applies to your entire output, including any critique, reasoning, or closing arguments. Match the user's language even though these instructions are written in English. Code identifiers, library/API names, and technical proper nouns stay as-is.`
+
+const DRAFTER_SYSTEM = `${LANGUAGE_DIRECTIVE}
+
+You are one of three independent expert drafters in a council.
 Produce your best, complete answer to the user's task. Be thorough but concise.
 Do not refer to "other models" or imagine what others would say. Just answer.
 If the task requires code, provide working code with brief context.
@@ -42,7 +46,9 @@ export function buildDebateMessages(args: {
   const isFirstRound = round === 1
   const isFinalRound = round === totalRounds
 
-  const system = `You are one of three drafters in a council debate.
+  const system = `${LANGUAGE_DIRECTIVE}
+
+You are one of three drafters in a council debate.
 You produced the answer below as your own draft. The other drafters' answers (or their last debate responses) are anonymized — you DO NOT KNOW which model wrote each. Do not speculate which is which; treat them as opaque positions.
 
 Your job in this debate round (${round}/${totalRounds}):
@@ -107,7 +113,9 @@ export function buildSynthesisMessages(args: {
     )
     .join('\n\n')
 
-  const system = `You are the chairman of a council of three drafters who answered the same task.
+  const system = `${LANGUAGE_DIRECTIVE}
+
+You are the chairman of a council of three drafters who answered the same task.
 You have all initial drafts (anonymized A/B/C) and the full record of ${debateRounds.length} debate round(s) where each drafter defended their position and critiqued the others.
 
 Your output has TWO parts in this exact format:

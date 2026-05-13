@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { CopyIcon, PlusIcon } from 'lucide-react'
 import { useT } from '@/presentation/hooks/useT'
 import { useCouncilStream } from '@/presentation/hooks/useCouncilStream'
 import { useActiveAgent } from '@/presentation/hooks/useActiveAgent'
@@ -11,6 +14,21 @@ export function Council() {
   const t = useT()
   const agent = useActiveAgent()
   const { state, runs, start, selectRun, closeRun, deleteRun, clearHistory } = useCouncilStream()
+
+  const [taskCopied, setTaskCopied] = useState(false)
+
+  const handleCopyTask = async (): Promise<void> => {
+    if (!state.activeTask) return
+    try {
+      await navigator.clipboard.writeText(state.activeTask)
+      setTaskCopied(true)
+      toast.success(t('common.copied'))
+      setTimeout(() => setTaskCopied(false), 1500)
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'clipboard unavailable'
+      toast.error(t('common.copy'), { description: reason })
+    }
+  }
 
   if (!agent) {
     return (
@@ -56,10 +74,31 @@ export function Council() {
                 </span>
               ) : null}
               {state.activeTask ? (
-                <span className="truncate flex-1 min-w-0" title={state.activeTask}>
-                  · {state.activeTask}
-                </span>
+                <>
+                  <span className="truncate flex-1 min-w-0" title={state.activeTask}>
+                    · {state.activeTask}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { void handleCopyTask() }}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md hover:bg-foreground/10 transition-colors flex-shrink-0"
+                    aria-label={t('common.copy')}
+                    title={t('common.copy')}
+                  >
+                    <CopyIcon className="size-3" aria-hidden="true" />
+                    <span>{taskCopied ? t('common.copied') : t('common.copy')}</span>
+                  </button>
+                </>
               ) : null}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={closeRun}
+                className="ml-auto flex-shrink-0 h-7"
+              >
+                <PlusIcon className="size-3 mr-1" aria-hidden="true" />
+                {t('council.newRun')}
+              </Button>
             </div>
           ) : null}
 

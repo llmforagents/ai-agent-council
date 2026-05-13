@@ -61,7 +61,7 @@ export function useCouncilStream(): {
   deleteRun: (runId: string) => void
   clearHistory: () => void
 } {
-  const { rest } = useAppContainer()
+  const { rest, apiBase } = useAppContainer()
   const agent = useActiveAgent()
   const queryClient = useQueryClient()
   const bucket = useCouncilStore((s) => (agent ? s.byAgent[agent.id] : undefined))
@@ -116,7 +116,12 @@ export function useCouncilStream(): {
         let errMessage: string | null = null
         try {
           const generator = runCouncilChat(
-            { chat, getBalanceCents },
+            {
+              chat,
+              getBalanceCents,
+              apiKey: agent.apiKey,
+              sdkConfig: { baseUrl: apiBase },
+            },
             { config: args.config, userTask: args.userTask },
           )
           for await (const event of generator) {
@@ -187,7 +192,7 @@ export function useCouncilStream(): {
         }
       })()
     },
-    [rest, agent, addRun, queryClient],
+    [rest, apiBase, agent, addRun, queryClient],
   )
 
   const selectRun = useCallback(

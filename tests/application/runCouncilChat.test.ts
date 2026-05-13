@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   runCouncilChat,
   splitChairmanOutput,
@@ -9,6 +9,7 @@ import {
 import { Ok, Err } from '@/domain/result'
 import { COUNCIL_PLANS } from '@/domain/council'
 import type { CouncilEvent } from '@/domain/councilEvents'
+import type { ApiKey } from '@/domain/branded'
 
 type StreamImpl = (args: ChatPortArgs) => AsyncGenerator<ChatPortChunk, void, void>
 
@@ -252,5 +253,122 @@ describe('splitChairmanOutput', () => {
     const r = splitChairmanOutput('The answer.\n===COUNCIL_REASONING===\n   ')
     expect(r.answer).toBe('The answer.')
     expect(r.reasoning).toBeNull()
+  })
+})
+
+describe('runCouncilChat — tools branch', () => {
+  it('with tools.stages=[] does NOT trigger SDK conversation (regression)', async () => {
+    // Reuse the same fake-chat helpers the rest of this file uses.
+    const chat = fakeChat((args) => {
+      const isSynth = isSynthesisRequest(args.messages)
+      const isDeb = !isSynth && isDebateRequest(args.messages)
+      const content = isSynth ? 'final' : isDeb ? 'debate' : 'draft'
+      return singleChunk(content)
+    })
+    const events = await collect(
+      runCouncilChat({ chat }, { config: COUNCIL_PLANS.lite, userTask: 't' }),
+    )
+    const kinds = events.map((e) => e.kind)
+    expect(kinds).not.toContain('draft_tool_call')
+    expect(kinds).not.toContain('draft_tool_result')
+    expect(kinds).not.toContain('debate_tool_call')
+    expect(kinds).not.toContain('debate_tool_result')
+    expect(kinds).toContain('council_done')
+  })
+
+  it('emits draft_tool_call/result when tools.stages includes drafts', async () => {
+    // Mock the SDK at the module level so the tools path can be exercised
+    // without an actual network call. We mock @/infrastructure/sdkClient so
+    // runCouncilTurn sees a stream of pre-canned events.
+    vi.resetModules()
+    let toolStartArgs: Readonly<Record<string, unknown>> = {}
+    vi.doMock('@/infrastructure/sdkClient', () => ({
+      createSdkClient: () => ({
+        tools: {},
+        chat: {
+          conversation: () => ({
+            stream: () => (async function* () {
+              yield { type: 'text', content: 'partial ' }
+              yield { type: 'tool_start', name: 'google_search', args: { q: 'foo' } }
+              toolStartArgs = { q: 'foo' }
+              yield {
+                type: 'tool_end',
+                name: 'google_search',
+                result: { content: [{ type: 'text', text: 'found 3' }], text: 'found 3' },
+                durationMs: 5,
+              }
+              yield { type: 'text', content: 'answer' }
+              yield { type: 'done', response: { content: 'partial answer' } }
+            })(),
+          }),
+        },
+      }),
+    }))
+    // Re-import the module under test to pick up the mock.
+    const { runCouncilChat: runWithMock } = await import('@/application/runCouncilChat')
+    const chat = fakeChat((args) => {
+      const isSynth = isSynthesisRequest(args.messages)
+      const isDeb = !isSynth && isDebateRequest(args.messages)
+      return singleChunk(isSynth ? 'final' : isDeb ? 'debate' : 'draft')
+    })
+    const proConfig = COUNCIL_PLANS.pro  // tools.stages = ['drafts']
+    const apiKey = 'k_test' as unknown as ApiKey
+    const events = await collect(
+      runWithMock(
+        { chat, apiKey },
+        { config: proConfig, userTask: 'q' },
+      ),
+    )
+    const toolCalls = events.filter((e) => e.kind === 'draft_tool_call')
+    const toolResults = events.filter((e) => e.kind === 'draft_tool_result')
+    expect(toolCalls.length).toBeGreaterThan(0)
+    expect(toolResults.length).toBe(toolCalls.length)
+    // Debate stage does NOT get tools for pro plan.
+    expect(events.find((e) => e.kind === 'debate_tool_call')).toBeUndefined()
+    void toolStartArgs
+    vi.doUnmock('@/infrastructure/sdkClient')
+  })
+
+  it('each draft_tool_call has a matching draft_tool_result with the same callId', async () => {
+    vi.resetModules()
+    vi.doMock('@/infrastructure/sdkClient', () => ({
+      createSdkClient: () => ({
+        tools: {},
+        chat: {
+          conversation: () => ({
+            stream: () => (async function* () {
+              yield { type: 'tool_start', name: 'google_search', args: {} }
+              yield {
+                type: 'tool_end',
+                name: 'google_search',
+                result: { content: [{ type: 'text', text: 'r' }], text: 'r' },
+                durationMs: 1,
+              }
+              yield { type: 'done', response: { content: 'x' } }
+            })(),
+          }),
+        },
+      }),
+    }))
+    const { runCouncilChat: runWithMock } = await import('@/application/runCouncilChat')
+    const chat = fakeChat((args) => {
+      const isSynth = isSynthesisRequest(args.messages)
+      const isDeb = !isSynth && isDebateRequest(args.messages)
+      return singleChunk(isSynth ? 'final' : isDeb ? 'debate' : 'draft')
+    })
+    const apiKey = 'k_test' as unknown as ApiKey
+    const events = await collect(
+      runWithMock(
+        { chat, apiKey },
+        { config: COUNCIL_PLANS.pro, userTask: 'q' },
+      ),
+    )
+    const calls = events.filter((e) => e.kind === 'draft_tool_call') as Array<Extract<typeof events[number], { kind: 'draft_tool_call' }>>
+    const results = events.filter((e) => e.kind === 'draft_tool_result') as Array<Extract<typeof events[number], { kind: 'draft_tool_result' }>>
+    for (const call of calls) {
+      const match = results.find((r) => r.callId === call.callId)
+      expect(match).toBeDefined()
+    }
+    vi.doUnmock('@/infrastructure/sdkClient')
   })
 })

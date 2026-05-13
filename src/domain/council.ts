@@ -8,6 +8,7 @@ export type CouncilConfig = Readonly<{
   drafters: ReadonlyArray<Model>
   chairman: Model
   debateRounds: number
+  tools: CouncilToolsConfig
 }>
 
 export const MAX_DRAFTERS = 3 as const
@@ -15,6 +16,21 @@ export const MIN_DRAFTERS = 2 as const
 
 export const MIN_DEBATE_ROUNDS = 2 as const
 export const MAX_DEBATE_ROUNDS = 5 as const
+
+export type CouncilStage = 'drafts' | 'debate'
+
+export const COUNCIL_STAGE_ORDER: ReadonlyArray<CouncilStage> = ['drafts', 'debate'] as const
+
+export const COUNCIL_TOOL_NAMES = ['google_search', 'google_news', 'fetch_html'] as const
+export type CouncilToolName = (typeof COUNCIL_TOOL_NAMES)[number]
+
+export const MIN_TOOL_CALLS_PER_DRAFTER = 0 as const
+export const MAX_TOOL_CALLS_PER_DRAFTER = 5 as const
+
+export type CouncilToolsConfig = Readonly<{
+  stages: ReadonlyArray<CouncilStage>
+  maxCallsPerDrafter: number
+}>
 
 export type CouncilPlan = 'lite' | 'pro' | 'power'
 
@@ -48,6 +64,7 @@ export const COUNCIL_PLANS: Readonly<Record<CouncilPlan, CouncilConfig>> = {
     ],
     chairman: Model('google/gemini-2.5-flash-lite'),
     debateRounds: PLAN_DEFAULT_ROUNDS.lite,
+    tools: { stages: [], maxCallsPerDrafter: 0 },
   },
   pro: {
     drafters: [
@@ -57,6 +74,7 @@ export const COUNCIL_PLANS: Readonly<Record<CouncilPlan, CouncilConfig>> = {
     ],
     chairman: Model('anthropic/claude-sonnet-4.6'),
     debateRounds: PLAN_DEFAULT_ROUNDS.pro,
+    tools: { stages: ['drafts'], maxCallsPerDrafter: 3 },
   },
   power: {
     drafters: [
@@ -66,6 +84,7 @@ export const COUNCIL_PLANS: Readonly<Record<CouncilPlan, CouncilConfig>> = {
     ],
     chairman: Model('anthropic/claude-opus-4.7'),
     debateRounds: PLAN_DEFAULT_ROUNDS.power,
+    tools: { stages: ['drafts', 'debate'], maxCallsPerDrafter: 3 },
   },
 }
 
@@ -97,5 +116,14 @@ export function estimateCouncilCostCents(config: CouncilConfig): number {
   const callsPerDrafterStage = Math.max(1, config.debateRounds)
   const draftAndDebateCost = drafterTotal * callsPerDrafterStage
   const synthesisCost = isPremium(config.chairman) ? 15 : 2
-  return draftAndDebateCost + synthesisCost
+
+  // Tools term: each tool call ~ $0.0012 (0.12¢).
+  // 'drafts' adds 1 stage of calls per drafter. 'debate' adds debateRounds stages.
+  const draftsMultiplier = config.tools.stages.includes('drafts') ? 1 : 0
+  const debateMultiplier = config.tools.stages.includes('debate') ? config.debateRounds : 0
+  const totalToolCalls =
+    config.drafters.length * config.tools.maxCallsPerDrafter * (draftsMultiplier + debateMultiplier)
+  const toolsCostCents = Math.round(totalToolCalls * 0.12)
+
+  return draftAndDebateCost + synthesisCost + toolsCostCents
 }

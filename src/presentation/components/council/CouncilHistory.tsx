@@ -26,6 +26,14 @@ function formatRunTimestamp(iso: string, locale: string): string {
   return `${date} ${time}`
 }
 
+function countToolsInRun(run: CouncilSnapshot): number {
+  let n = 0
+  for (const e of run.events) {
+    if (e.kind === 'draft_tool_call' || e.kind === 'debate_tool_call') n++
+  }
+  return n
+}
+
 type Props = Readonly<{
   runs: ReadonlyArray<CouncilSnapshot>
   activeRunId: string | null
@@ -83,6 +91,14 @@ export function CouncilHistory({ runs, activeRunId, onSelect, onDelete, onClearA
                 {run.error ? (
                   <span className="text-destructive flex-shrink-0">⚠</span>
                 ) : null}
+                {(() => {
+                  const n = countToolsInRun(run)
+                  return n > 0 ? (
+                    <span className="text-muted-foreground flex-shrink-0 font-mono" title={`${n} tool calls`}>
+                      🔎 {n}
+                    </span>
+                  ) : null
+                })()}
                 <span className="font-mono text-muted-foreground flex-shrink-0">
                   ${(run.totalCostCents / 100).toFixed(4)}
                 </span>

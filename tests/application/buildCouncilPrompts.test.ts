@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildDrafterMessages,
+  buildDrafterMessagesWithTools,
   buildDebateMessages,
+  buildDebateMessagesWithTools,
   buildSynthesisMessages,
   anonymizeOthers,
 } from '@/application/buildCouncilPrompts'
@@ -98,5 +100,74 @@ describe('buildCouncilPrompts', () => {
     expect(userContent).toContain('r2b')
     expect(userContent).toContain('Round 1')
     expect(userContent).toContain('Round 2')
+  })
+})
+
+describe('buildDrafterMessagesWithTools', () => {
+  it('includes all three tool names in the system prompt', () => {
+    const msgs = buildDrafterMessagesWithTools(
+      'task',
+      ['google_search', 'google_news', 'fetch_html'],
+      3,
+    )
+    const system = msgs[0]
+    expect(system?.role).toBe('system')
+    expect(system?.content).toContain('google_search')
+    expect(system?.content).toContain('google_news')
+    expect(system?.content).toContain('fetch_html')
+  })
+
+  it('interpolates maxCalls into the budget directive', () => {
+    const msgs = buildDrafterMessagesWithTools('task', ['google_search'], 4)
+    expect(msgs[0]?.content).toContain('max 4 tool calls')
+  })
+
+  it('only lists the allowed subset of tools', () => {
+    const msgs = buildDrafterMessagesWithTools('task', ['google_search'], 3)
+    const system = msgs[0]?.content ?? ''
+    expect(system).toContain('google_search')
+    expect(system).not.toContain('google_news:')
+    expect(system).not.toContain('fetch_html:')
+  })
+})
+
+describe('buildDebateMessagesWithTools', () => {
+  it('appends the tools block to the base debate system prompt', () => {
+    const args = {
+      userTask: 'task',
+      myDraft: 'draft',
+      myPreviousDebate: null,
+      othersLatest: [],
+      round: 1,
+      totalRounds: 2,
+      allowedTools: ['google_search', 'fetch_html'] as const,
+      maxCalls: 2,
+    }
+    const msgs = buildDebateMessagesWithTools(args)
+    expect(msgs[0]?.content).toContain('debate round (1/2)')
+    expect(msgs[0]?.content).toContain('max 2 tool calls')
+  })
+})
+
+describe('buildDrafterMessages (regression)', () => {
+  it('does not mention tools', () => {
+    const msgs = buildDrafterMessages('task')
+    expect(msgs[0]?.content).not.toContain('google_search')
+    expect(msgs[0]?.content).not.toContain('tool calls')
+  })
+})
+
+describe('buildDebateMessages (regression)', () => {
+  it('does not mention tools', () => {
+    const msgs = buildDebateMessages({
+      userTask: 'task',
+      myDraft: 'draft',
+      myPreviousDebate: null,
+      othersLatest: [],
+      round: 1,
+      totalRounds: 2,
+    })
+    expect(msgs[0]?.content).not.toContain('google_search')
+    expect(msgs[0]?.content).not.toContain('tool calls')
   })
 })

@@ -1,4 +1,5 @@
 import type { DrafterSlot } from '@/domain/council'
+import type { CouncilToolName } from '@/domain/council'
 
 export type ChatMessage = Readonly<{
   role: 'system' | 'user' | 'assistant'
@@ -6,6 +7,26 @@ export type ChatMessage = Readonly<{
 }>
 
 const LANGUAGE_DIRECTIVE = `LANGUAGE: Reply in the same natural language as the user's task. If the user wrote in Spanish, answer in Spanish; in French, French; in Portuguese, Portuguese; in Japanese, Japanese; etc. This applies to your entire output, including any critique, reasoning, or closing arguments. Match the user's language even though these instructions are written in English. Code identifiers, library/API names, and technical proper nouns stay as-is.`
+
+function buildToolsBlock(allowedTools: ReadonlyArray<CouncilToolName>, maxCalls: number): string {
+  const toolDescriptions: Record<CouncilToolName, string> = {
+    google_search: 'google_search: Google web search for facts, dates, prices, or finding URLs',
+    google_news: 'google_news: recent news articles with date and source',
+    fetch_html: 'fetch_html: full HTML of a URL when you need raw content (set auto_fallback:true on blocked sites)',
+  }
+  const list = allowedTools.map((t) => `- ${toolDescriptions[t]}`).join('\n')
+  return `You have access to these tools to research the question:
+${list}
+
+USE TOOLS WHEN:
+- The task mentions current events, dates, prices, or anything time-sensitive
+- You need to verify a specific URL or quote
+- You'd otherwise hallucinate facts
+
+DO NOT use tools when the task is purely opinion, analysis, or code that doesn't need fresh data.
+
+Budget: max ${maxCalls} tool calls. Each one costs money. Prefer one good query over several.`
+}
 
 const DRAFTER_SYSTEM = `${LANGUAGE_DIRECTIVE}
 
@@ -171,4 +192,50 @@ export function anonymizeOthers(
     label: labels[i] ?? '?',
     content: d.content,
   }))
+}
+
+export function buildDrafterMessagesWithTools(
+  userTask: string,
+  allowedTools: ReadonlyArray<CouncilToolName>,
+  maxCalls: number,
+): ReadonlyArray<ChatMessage> {
+  const system = `${DRAFTER_SYSTEM}
+
+${buildToolsBlock(allowedTools, maxCalls)}`
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: userTask },
+  ]
+}
+
+export function buildDebateMessagesWithTools(args: {
+  userTask: string
+  myDraft: string
+  myPreviousDebate: string | null
+  othersLatest: ReadonlyArray<{ label: string; content: string }>
+  round: number
+  totalRounds: number
+  allowedTools: ReadonlyArray<CouncilToolName>
+  maxCalls: number
+}): ReadonlyArray<ChatMessage> {
+  const base = buildDebateMessages({
+    userTask: args.userTask,
+    myDraft: args.myDraft,
+    myPreviousDebate: args.myPreviousDebate,
+    othersLatest: args.othersLatest,
+    round: args.round,
+    totalRounds: args.totalRounds,
+  })
+  const originalSystem = base[0]
+  const userMessage = base[1]
+  if (!originalSystem || !userMessage || originalSystem.role !== 'system') {
+    return base
+  }
+  const systemWithTools = `${originalSystem.content}
+
+${buildToolsBlock(args.allowedTools, args.maxCalls)}`
+  return [
+    { role: 'system', content: systemWithTools },
+    userMessage,
+  ]
 }

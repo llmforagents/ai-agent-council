@@ -19,6 +19,8 @@ import type {
 } from '@/application/ports'
 import { createSdkClient } from './sdkClient'
 
+// 60s covers the unauthenticated REST envelope (registerAgent).
+// Streaming chat and SDK-backed endpoints use their own timeout passed by the caller.
 const DEFAULT_FETCH_TIMEOUT_MS = 60_000
 
 export class RestApiClient implements RestApiPort {

@@ -74,4 +74,38 @@ describe('domain/council', () => {
     const proChair: CouncilConfig = { ...COUNCIL_PLANS.lite, chairman: Model('google/gemini-2.5-pro') }
     expect(estimateCouncilCostCents(flashChair)).toBeLessThan(estimateCouncilCostCents(proChair))
   })
+
+  it('tools cost is zero when no stages are enabled', () => {
+    const base = COUNCIL_PLANS.lite
+    expect(estimateCouncilCostCents(base)).toBeGreaterThan(0)
+    const withoutTools = { ...base, tools: { stages: [], maxCallsPerDrafter: 0 } }
+    expect(estimateCouncilCostCents(withoutTools)).toBe(estimateCouncilCostCents(base))
+  })
+
+  it('tools cost scales with stages and maxCallsPerDrafter', () => {
+    const draftsOnly = {
+      ...COUNCIL_PLANS.lite,
+      tools: { stages: ['drafts'] as const, maxCallsPerDrafter: 3 },
+    }
+    const draftsAndDebate = {
+      ...COUNCIL_PLANS.lite,
+      tools: { stages: ['drafts', 'debate'] as const, maxCallsPerDrafter: 3 },
+    }
+    const liteRounds = COUNCIL_PLANS.lite.debateRounds
+    const drafters = COUNCIL_PLANS.lite.drafters.length
+
+    const expectedDraftsOnly = Math.round(drafters * 3 * 1 * 0.12)
+    const expectedBoth = Math.round(drafters * 3 * (1 + liteRounds) * 0.12)
+
+    expect(estimateCouncilCostCents(draftsAndDebate) - estimateCouncilCostCents(draftsOnly))
+      .toBe(expectedBoth - expectedDraftsOnly)
+  })
+
+  it('power preset full-tools run adds at most ~5¢ over a tools-disabled version', () => {
+    const withTools = COUNCIL_PLANS.power
+    const withoutTools = { ...withTools, tools: { stages: [], maxCallsPerDrafter: 0 } }
+    const delta = estimateCouncilCostCents(withTools) - estimateCouncilCostCents(withoutTools)
+    expect(delta).toBeGreaterThan(0)
+    expect(delta).toBeLessThanOrEqual(8)
+  })
 })

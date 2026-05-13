@@ -160,7 +160,15 @@ export function useCouncilStream(): {
           errMessage = e instanceof Error ? e.message : String(e)
           setState((prev) => ({ ...prev, isRunning: false, error: errMessage }))
         } finally {
-          if (!ac.signal.aborted && agent) {
+          // Persist if the run completed naturally (council_done/council_failed
+          // already emitted), even when an abort fired immediately after — the
+          // race happens when the user clicks "Nueva corrida" or navigates the
+          // moment the button enables, before the finally has had a chance to
+          // call addRun. Aborts that hit BEFORE completion still skip persist.
+          const ranToCompletion = collectedEvents.some(
+            (e) => e.kind === 'council_done' || e.kind === 'council_failed',
+          )
+          if ((ranToCompletion || !ac.signal.aborted) && agent) {
             const persistableEvents = collectedEvents.filter(
               (e) =>
                 e.kind !== 'draft_delta' &&

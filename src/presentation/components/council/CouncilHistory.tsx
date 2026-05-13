@@ -94,8 +94,11 @@ export function CouncilHistory({ runs, activeRunId, onSelect, onDelete, onClearA
                 {(() => {
                   const n = countToolsInRun(run)
                   return n > 0 ? (
-                    <span className="text-muted-foreground flex-shrink-0 font-mono" title={`${n} tool calls`}>
-                      🔎 {n}
+                    <span
+                      className="text-muted-foreground flex-shrink-0 font-mono"
+                      title={t('council.toolCountTooltip', { count: String(n) })}
+                    >
+                      <span aria-hidden="true">🔎 </span>{n}
                     </span>
                   ) : null
                 })()}

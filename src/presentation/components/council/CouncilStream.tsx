@@ -2,9 +2,17 @@ import { useState } from 'react'
 import { useT } from '@/presentation/hooks/useT'
 import type { CouncilEvent } from '@/domain/councilEvents'
 import type { DrafterSlot } from '@/domain/council'
+import type { CouncilToolName } from '@/domain/council'
 import { describeError } from '@/domain/errors'
 import { Card } from '@/presentation/components/ui/card'
 import { Button } from '@/presentation/components/ui/button'
+
+export type ToolCallRecord = Readonly<{
+  callId: string
+  toolName: CouncilToolName
+  args: unknown
+  result: Readonly<{ ok: boolean; summary: string }> | null
+}>
 
 const REASONING_MARKER = '===COUNCIL_REASONING==='
 
@@ -19,6 +27,7 @@ type DraftBucket = {
   failureReason: string | null
   costCents: number | null
   durationMs: number | null
+  toolCalls: ToolCallRecord[]
 }
 
 type DebateBucket = {
@@ -31,6 +40,7 @@ type DebateBucket = {
   failureReason: string | null
   costCents: number | null
   durationMs: number | null
+  toolCalls: ToolCallRecord[]
 }
 
 type SynthesisBucket = {
@@ -76,6 +86,7 @@ function reduceEvents(events: ReadonlyArray<CouncilEvent>): Reduced {
         failureReason: null,
         costCents: null,
         durationMs: null,
+        toolCalls: [],
       }
       r.drafts.set(slot, b)
     }
@@ -97,6 +108,7 @@ function reduceEvents(events: ReadonlyArray<CouncilEvent>): Reduced {
         failureReason: null,
         costCents: null,
         durationMs: null,
+        toolCalls: [],
       }
       r.debates.set(key, b)
     }
@@ -134,6 +146,25 @@ function reduceEvents(events: ReadonlyArray<CouncilEvent>): Reduced {
         b.failureReason = describeError(e.error)
         break
       }
+      case 'draft_tool_call': {
+        const b = ensureDraft(e.slot)
+        b.toolCalls.push({
+          callId: e.callId,
+          toolName: e.toolName,
+          args: e.args,
+          result: null,
+        })
+        break
+      }
+      case 'draft_tool_result': {
+        const b = ensureDraft(e.slot)
+        b.toolCalls = b.toolCalls.map((tc) =>
+          tc.callId === e.callId
+            ? { ...tc, result: { ok: e.ok, summary: e.summary } }
+            : tc,
+        )
+        break
+      }
       case 'debate_round_started':
         // no-op; rounds inferred from buckets
         break
@@ -161,6 +192,25 @@ function reduceEvents(events: ReadonlyArray<CouncilEvent>): Reduced {
         b.model = String(e.model)
         b.failed = true
         b.failureReason = describeError(e.error)
+        break
+      }
+      case 'debate_tool_call': {
+        const b = ensureDebate(e.round, e.slot)
+        b.toolCalls.push({
+          callId: e.callId,
+          toolName: e.toolName,
+          args: e.args,
+          result: null,
+        })
+        break
+      }
+      case 'debate_tool_result': {
+        const b = ensureDebate(e.round, e.slot)
+        b.toolCalls = b.toolCalls.map((tc) =>
+          tc.callId === e.callId
+            ? { ...tc, result: { ok: e.ok, summary: e.summary } }
+            : tc,
+        )
         break
       }
       case 'synthesis_started':

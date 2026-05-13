@@ -6,6 +6,7 @@ import type { CouncilToolName } from '@/domain/council'
 import { describeError } from '@/domain/errors'
 import { Card } from '@/presentation/components/ui/card'
 import { Button } from '@/presentation/components/ui/button'
+import { CouncilToolPanel } from './CouncilToolPanel'
 
 export type ToolCallRecord = Readonly<{
   callId: string
@@ -299,6 +300,7 @@ export function CouncilStream({ events, isRunning }: Props) {
                   {b.done ? <span className="text-emerald-600">✓</span> : null}
                   {b.failed ? <span className="text-destructive">✗</span> : null}
                 </div>
+                <CouncilToolPanel toolCalls={b.toolCalls} />
                 {b.failed ? (
                   <div className="text-destructive text-xs">
                     {t('council.draftFailed')}: {b.failureReason}
@@ -363,6 +365,9 @@ export function CouncilStream({ events, isRunning }: Props) {
                             </span>
                           ) : null}
                         </summary>
+                        <div className="mt-2">
+                          <CouncilToolPanel toolCalls={b.toolCalls} />
+                        </div>
                         {b.failed ? (
                           <div className="text-destructive text-xs mt-2">
                             {b.failureReason}

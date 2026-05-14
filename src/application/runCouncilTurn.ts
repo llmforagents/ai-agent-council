@@ -75,6 +75,9 @@ function sdkErrorToAppError(e: LLM4AgentsError): AppError {
       return { kind: 'timeout', endpoint: 'sdk-conversation' }
     case 'insufficient_balance':
       return { kind: 'insufficient_balance' }
+    case 'tool_execution_error':
+    case 'tool_not_found':
+      return { kind: 'tool_subsystem', message: e.message }
     default:
       return { kind: 'unknown', message: e.message, raw: { code: e.code } }
   }
@@ -159,6 +162,20 @@ export async function* runDrafterTurnWithTools(
       if (e.code === 'tool_loop_limit') {
         // Non-fatal: the conversation simply exhausted its tool rounds.
         return { content: finalContent, costCents }
+      }
+      // Drain any in-flight tool_call ids with a synthetic failure result so
+      // the UI doesn't leave them stuck in an "in-flight" state when the SDK
+      // throws after emitting tool_start without a matching tool_end.
+      while (callIdStack.length > 0) {
+        const pending = callIdStack.shift()
+        if (pending) {
+          yield {
+            kind: 'tool_result',
+            callId: pending,
+            ok: false,
+            summary: `Tool error: ${e.message}`,
+          }
+        }
       }
       throw sdkErrorToAppError(e)
     }

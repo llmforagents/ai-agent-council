@@ -184,4 +184,24 @@ describe('runDrafterTurnWithTools', () => {
       for await (const _ev of runDrafterTurnWithTools(baseDeps, baseParams)) void _ev
     }).rejects.toMatchObject({ kind: 'rate_limited' })
   })
+
+  it('maps tool_execution_error to AppError kind tool_subsystem', async () => {
+    mockStream = (async function* () {
+      yield { type: 'tool_start', name: 'google_search', args: { q: 'x' } }
+      throw new LLM4AgentsError('Search failed: upstream_error', 'tool_execution_error', 502, undefined)
+    })()
+    const events: unknown[] = []
+    let thrown: unknown = null
+    try {
+      for await (const ev of runDrafterTurnWithTools(baseDeps, baseParams)) events.push(ev)
+    } catch (e) {
+      thrown = e
+    }
+    expect((thrown as { kind: string }).kind).toBe('tool_subsystem')
+    // The pending tool_call must have been drained as a tool_result ok=false
+    const result = events.find((e) => (e as { kind: string }).kind === 'tool_result') as { ok: boolean; summary: string }
+    expect(result).toBeDefined()
+    expect(result.ok).toBe(false)
+    expect(result.summary).toContain('Search failed')
+  })
 })

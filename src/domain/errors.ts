@@ -11,6 +11,7 @@ export type RestError =
   | { readonly kind: 'rate_limited'; readonly retryAfterMs: number }
   | { readonly kind: 'validation'; readonly issues: readonly ZodLikeIssue[] }
   | { readonly kind: 'upstream_error'; readonly status: number; readonly body: unknown }
+  | { readonly kind: 'tool_subsystem'; readonly message: string }
   | { readonly kind: 'unknown'; readonly message: string; readonly raw: unknown }
 
 export type AppError = RestError
@@ -24,6 +25,7 @@ export function describeError(e: AppError): string {
     case 'rate_limited': return `Rate limited — retry in ${Math.ceil(e.retryAfterMs / 1000)}s`
     case 'validation': return `Validation failed: ${e.issues.length} issue(s)`
     case 'upstream_error': return `Upstream error ${e.status}`
+    case 'tool_subsystem': return `Tool subsystem error: ${e.message}`
     case 'unknown': return `Unexpected error: ${e.message}`
   }
 }

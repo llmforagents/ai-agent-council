@@ -275,53 +275,55 @@ export async function* runCouncilChat(
   const draftPromises = draftSlots.map(async ({ slot, model }) => {
     const t0 = Date.now()
     try {
+      let final: { content: string; costCents: number } | null = null
       if (useToolsInDrafts) {
         if (!deps.apiKey) {
           throw new Error('runCouncilChat: tools enabled but apiKey not provided in deps')
         }
-        const systemMsg = buildDrafterMessagesWithTools(
-          userTask,
-          COUNCIL_TOOL_NAMES,
-          config.tools.maxCallsPerDrafter,
-        )[0]
-        const final = await streamDrafterTurnInto({
-          apiKey: deps.apiKey,
-          ...(deps.sdkConfig !== undefined ? { sdkConfig: deps.sdkConfig } : {}),
-          model,
-          systemPrompt: systemMsg?.content ?? '',
-          history: [],
-          userMessage: userTask,
-          maxToolCalls: config.tools.maxCallsPerDrafter,
-          ...(signal !== undefined ? { signal } : {}),
-          slot,
-          deltaQueue: draftDeltaQueue,
-          toolQueue: draftToolQueue,
-        })
-        return {
-          kind: 'ok' as const,
-          slot,
-          model,
-          content: final.content,
-          costCents: final.costCents,
-          durationMs: Date.now() - t0,
+        try {
+          const systemMsg = buildDrafterMessagesWithTools(
+            userTask,
+            COUNCIL_TOOL_NAMES,
+            config.tools.maxCallsPerDrafter,
+          )[0]
+          final = await streamDrafterTurnInto({
+            apiKey: deps.apiKey,
+            ...(deps.sdkConfig !== undefined ? { sdkConfig: deps.sdkConfig } : {}),
+            model,
+            systemPrompt: systemMsg?.content ?? '',
+            history: [],
+            userMessage: userTask,
+            maxToolCalls: config.tools.maxCallsPerDrafter,
+            ...(signal !== undefined ? { signal } : {}),
+            slot,
+            deltaQueue: draftDeltaQueue,
+            toolQueue: draftToolQueue,
+          })
+        } catch (e) {
+          const err = e as { kind?: string }
+          if (err.kind !== 'tool_subsystem') throw e
+          // Tools failed at the MCP layer — fall through to the no-tools path.
+          // The drafter still produces an answer based on the model's prior knowledge.
+          final = null
         }
-      } else {
+      }
+      if (final === null) {
         const messages = buildDrafterMessages(userTask)
-        const final = await streamOne(
+        final = await streamOne(
           chat,
           signal !== undefined ? { model, messages, signal } : { model, messages },
           (text) => {
             draftDeltaQueue.push({ slot, text })
           },
         )
-        return {
-          kind: 'ok' as const,
-          slot,
-          model,
-          content: final.content,
-          costCents: final.costCents,
-          durationMs: Date.now() - t0,
-        }
+      }
+      return {
+        kind: 'ok' as const,
+        slot,
+        model,
+        content: final.content,
+        costCents: final.costCents,
+        durationMs: Date.now() - t0,
       }
     } catch (e) {
       return { kind: 'failed' as const, slot, model, error: coerceToAppError(e) }
@@ -446,78 +448,80 @@ export async function* runCouncilChat(
       const t0 = Date.now()
       try {
         const others = anonymizeOthers(latestPerSlot, draft.slot)
+        let final: { content: string; costCents: number } | null = null
         if (useToolsInDebate) {
           if (!deps.apiKey) {
             throw new Error('runCouncilChat: tools enabled but apiKey not provided in deps')
           }
-          const baseMsgs = buildDebateMessagesWithTools({
-            userTask,
-            myDraft: draft.content,
-            myPreviousDebate: previousDebatePerSlot.get(draft.slot) ?? null,
-            othersLatest: others,
-            round,
-            totalRounds: debateRounds,
-            allowedTools: COUNCIL_TOOL_NAMES,
-            maxCalls: config.tools.maxCallsPerDrafter,
-          })
-          const systemMsg = baseMsgs[0]
-          const userMsg = baseMsgs[1]
-          const slotInner = draft.slot
-          const gen = runDrafterTurnWithTools(
-            deps.sdkConfig !== undefined
-              ? { key: deps.apiKey, sdkConfig: deps.sdkConfig }
-              : { key: deps.apiKey },
-            {
-              model: draft.model,
-              systemPrompt: systemMsg?.content ?? '',
-              history: [],
-              userMessage: userMsg?.content ?? '',
+          try {
+            const baseMsgs = buildDebateMessagesWithTools({
+              userTask,
+              myDraft: draft.content,
+              myPreviousDebate: previousDebatePerSlot.get(draft.slot) ?? null,
+              othersLatest: others,
+              round,
+              totalRounds: debateRounds,
               allowedTools: COUNCIL_TOOL_NAMES,
-              maxToolCalls: config.tools.maxCallsPerDrafter,
-              ...(signal !== undefined ? { signal } : {}),
-            },
-          )
-          let content = ''
-          let costCents = 0
-          for (;;) {
-            const r = await gen.next()
-            if (r.done) {
-              content = r.value.content
-              costCents = r.value.costCents
-              break
+              maxCalls: config.tools.maxCallsPerDrafter,
+            })
+            const systemMsg = baseMsgs[0]
+            const userMsg = baseMsgs[1]
+            const slotInner = draft.slot
+            const gen = runDrafterTurnWithTools(
+              deps.sdkConfig !== undefined
+                ? { key: deps.apiKey, sdkConfig: deps.sdkConfig }
+                : { key: deps.apiKey },
+              {
+                model: draft.model,
+                systemPrompt: systemMsg?.content ?? '',
+                history: [],
+                userMessage: userMsg?.content ?? '',
+                allowedTools: COUNCIL_TOOL_NAMES,
+                maxToolCalls: config.tools.maxCallsPerDrafter,
+                ...(signal !== undefined ? { signal } : {}),
+              },
+            )
+            let content = ''
+            let costCents = 0
+            for (;;) {
+              const r = await gen.next()
+              if (r.done) {
+                content = r.value.content
+                costCents = r.value.costCents
+                break
+              }
+              const ev = r.value
+              if (ev.kind === 'delta') {
+                debateDeltaQueue.push({ round, slot: slotInner, text: ev.text })
+              } else if (ev.kind === 'tool_call') {
+                debateToolQueue.push({
+                  kind: 'tool_call',
+                  round,
+                  slot: slotInner,
+                  callId: ev.callId,
+                  toolName: ev.toolName,
+                  args: ev.args,
+                })
+              } else if (ev.kind === 'tool_result') {
+                debateToolQueue.push({
+                  kind: 'tool_result',
+                  round,
+                  slot: slotInner,
+                  callId: ev.callId,
+                  ok: ev.ok,
+                  summary: ev.summary,
+                })
+              }
             }
-            const ev = r.value
-            if (ev.kind === 'delta') {
-              debateDeltaQueue.push({ round, slot: slotInner, text: ev.text })
-            } else if (ev.kind === 'tool_call') {
-              debateToolQueue.push({
-                kind: 'tool_call',
-                round,
-                slot: slotInner,
-                callId: ev.callId,
-                toolName: ev.toolName,
-                args: ev.args,
-              })
-            } else if (ev.kind === 'tool_result') {
-              debateToolQueue.push({
-                kind: 'tool_result',
-                round,
-                slot: slotInner,
-                callId: ev.callId,
-                ok: ev.ok,
-                summary: ev.summary,
-              })
-            }
+            final = { content, costCents }
+          } catch (e) {
+            const err = e as { kind?: string }
+            if (err.kind !== 'tool_subsystem') throw e
+            // Tools failed — fall back to no-tools path.
+            final = null
           }
-          return {
-            kind: 'ok' as const,
-            slot: draft.slot,
-            model: draft.model,
-            content,
-            costCents,
-            durationMs: Date.now() - t0,
-          }
-        } else {
+        }
+        if (final === null) {
           const messages = buildDebateMessages({
             userTask,
             myDraft: draft.content,
@@ -526,21 +530,21 @@ export async function* runCouncilChat(
             round,
             totalRounds: debateRounds,
           })
-          const final = await streamOne(
+          final = await streamOne(
             chat,
             signal !== undefined ? { model: draft.model, messages, signal } : { model: draft.model, messages },
             (text) => {
               debateDeltaQueue.push({ round, slot: draft.slot, text })
             },
           )
-          return {
-            kind: 'ok' as const,
-            slot: draft.slot,
-            model: draft.model,
-            content: final.content,
-            costCents: final.costCents,
-            durationMs: Date.now() - t0,
-          }
+        }
+        return {
+          kind: 'ok' as const,
+          slot: draft.slot,
+          model: draft.model,
+          content: final.content,
+          costCents: final.costCents,
+          durationMs: Date.now() - t0,
         }
       } catch (e) {
         return {

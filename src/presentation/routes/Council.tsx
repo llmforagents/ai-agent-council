@@ -9,6 +9,7 @@ import { CouncilStream } from '@/presentation/components/council/CouncilStream'
 import { CouncilHistory } from '@/presentation/components/council/CouncilHistory'
 import { Card } from '@/presentation/components/ui/card'
 import { Button } from '@/presentation/components/ui/button'
+import { safeCopy } from '@/lib/clipboard'
 
 export function Council() {
   const t = useT()
@@ -19,14 +20,13 @@ export function Council() {
 
   const handleCopyTask = async (): Promise<void> => {
     if (!state.activeTask) return
-    try {
-      await navigator.clipboard.writeText(state.activeTask)
+    const res = await safeCopy(state.activeTask)
+    if (res.ok) {
       setTaskCopied(true)
       toast.success(t('common.copied'))
       setTimeout(() => setTaskCopied(false), 1500)
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : 'clipboard unavailable'
-      toast.error(t('common.copy'), { description: reason })
+    } else {
+      toast.error(t('common.copy'), { description: res.reason })
     }
   }
 

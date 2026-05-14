@@ -7,6 +7,7 @@ import { useBalance } from '@/presentation/hooks/useBalance'
 import { useWalletStore, type StoredWallet } from '@/presentation/hooks/useWalletStore'
 import { Card } from '@/presentation/components/ui/card'
 import { Button } from '@/presentation/components/ui/button'
+import { safeCopy } from '@/lib/clipboard'
 
 const CHAINS = ['solana', 'polygon'] as const
 const TOKENS = ['USDC', 'USDT'] as const
@@ -105,8 +106,10 @@ export function Wallet() {
   }, [agent, balance])
 
   const handleCopy = useCallback((address: string): void => {
-    void navigator.clipboard.writeText(address)
-    toast.success(t('common.copied'))
+    void safeCopy(address).then((r) => {
+      if (r.ok) toast.success(t('common.copied'))
+      else toast.error(t('common.copy'), { description: r.reason })
+    })
   }, [t])
 
   if (!agent) return null

@@ -11,6 +11,7 @@ import { Card } from '@/presentation/components/ui/card'
 import { Button } from '@/presentation/components/ui/button'
 import { Input } from '@/presentation/components/ui/input'
 import { Label } from '@/presentation/components/ui/label'
+import { safeCopy } from '@/lib/clipboard'
 
 type Step = 'welcome' | 'has-agent' | 'enter-key' | 'register' | 'fund'
 
@@ -250,8 +251,10 @@ function FundingGuide() {
   }, [agent, rest])
 
   const handleCopy = useCallback((text: string) => {
-    void navigator.clipboard.writeText(text)
-    toast.success(t('common.copied'))
+    void safeCopy(text).then((r) => {
+      if (r.ok) toast.success(t('common.copied'))
+      else toast.error(t('common.copy'), { description: r.reason })
+    })
   }, [t])
 
   return (

@@ -8,6 +8,7 @@ import { LOCALES, LOCALE_LABELS, type Locale } from '@/domain/i18n'
 import { Card } from '@/presentation/components/ui/card'
 import { Button } from '@/presentation/components/ui/button'
 import { Input } from '@/presentation/components/ui/input'
+import { safeCopy } from '@/lib/clipboard'
 
 export function Settings() {
   const t = useT()
@@ -30,8 +31,10 @@ export function Settings() {
   }, [t, setAgent, navigate])
 
   const handleCopy = useCallback((value: string) => {
-    void navigator.clipboard.writeText(value)
-    toast.success(t('common.copied'))
+    void safeCopy(value).then((r) => {
+      if (r.ok) toast.success(t('common.copied'))
+      else toast.error(t('common.copy'), { description: r.reason })
+    })
   }, [t])
 
   const handleStartEdit = useCallback(() => {

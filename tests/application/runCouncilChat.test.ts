@@ -372,3 +372,58 @@ describe('runCouncilChat — tools branch', () => {
     vi.doUnmock('@/infrastructure/sdkClient')
   })
 })
+
+describe('runCouncilChat — empty-content drafter is treated as failed', () => {
+  it('drafter that returns empty content surfaces as draft_failed', async () => {
+    const chat = fakeChat((args) => {
+      const isSynth = isSynthesisRequest(args.messages)
+      const isDeb = !isSynth && isDebateRequest(args.messages)
+      if (isSynth) return singleChunk('final')
+      if (isDeb) return singleChunk('debate')
+      // Drafts return empty content (simulates a tool-budget-exhausted run).
+      return singleChunk('', 1)
+    })
+    const events = await collect(
+      runCouncilChat({ chat }, { config: COUNCIL_PLANS.lite, userTask: 't' }),
+    )
+    const failed = events.filter((e) => e.kind === 'draft_failed')
+    expect(failed).toHaveLength(3)
+    // No draft_done events should have been emitted for empty content.
+    expect(events.some((e) => e.kind === 'draft_done')).toBe(false)
+  })
+
+  it('aborts the run with validation when all drafters end up empty', async () => {
+    const chat = fakeChat(() => singleChunk('', 1))
+    const events = await collect(
+      runCouncilChat({ chat }, { config: COUNCIL_PLANS.lite, userTask: 't' }),
+    )
+    const failed = events.find((e) => e.kind === 'council_failed')
+    expect(failed).toBeTruthy()
+    if (failed && failed.kind === 'council_failed') {
+      expect(failed.error.kind).toBe('validation')
+    }
+    // Total cost should still reflect what was spent on the empty drafters.
+    expect(failed && 'partialCostCents' in failed && failed.partialCostCents).toBeGreaterThan(0)
+  })
+
+  it('proceeds when at least 2 drafters return non-empty content even if one is empty', async () => {
+    let draftCount = 0
+    const chat = fakeChat((args) => {
+      const isSynth = isSynthesisRequest(args.messages)
+      const isDeb = !isSynth && isDebateRequest(args.messages)
+      if (isSynth) return singleChunk('final')
+      if (isDeb) return singleChunk('debate')
+      draftCount += 1
+      // First drafter empty, others non-empty.
+      return singleChunk(draftCount === 1 ? '' : 'good content', 1)
+    })
+    const events = await collect(
+      runCouncilChat({ chat }, { config: COUNCIL_PLANS.lite, userTask: 't' }),
+    )
+    const failed = events.filter((e) => e.kind === 'draft_failed')
+    const done = events.filter((e) => e.kind === 'draft_done')
+    expect(failed).toHaveLength(1)
+    expect(done).toHaveLength(2)
+    expect(events.some((e) => e.kind === 'council_done')).toBe(true)
+  })
+})

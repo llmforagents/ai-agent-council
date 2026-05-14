@@ -112,7 +112,10 @@ export async function* runDrafterTurnWithTools(
       if (typeof c === 'number') costCents += c
     },
     enablePromptToolFallback: true,
-    maxToolRounds: Math.max(1, params.maxToolCalls),
+    // Give the model 2 rounds of headroom after exhausting the tool budget so
+    // it can actually produce a final text answer. SDK requires >= 1; we need
+    // tool_rounds + text_rounds, so total = maxToolCalls + 2 (at least 2).
+    maxToolRounds: Math.max(2, params.maxToolCalls + 2),
     ...(params.signal ? { signal: params.signal } : {}),
   })
 

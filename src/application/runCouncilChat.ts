@@ -416,7 +416,7 @@ export async function* runCouncilChat(
   const liveDrafts: DraftResult[] = []
 
   for (const settlement of draftSettlements) {
-    if (settlement.kind === 'ok') {
+    if (settlement.kind === 'ok' && settlement.content.trim() !== '') {
       totalCostCents += settlement.costCents
       liveDrafts.push({
         slot: settlement.slot,
@@ -431,6 +431,17 @@ export async function* runCouncilChat(
         content: settlement.content,
         costCents: settlement.costCents,
         durationMs: settlement.durationMs,
+      }
+    } else if (settlement.kind === 'ok') {
+      // Drafter spent the tool budget without producing a final text answer
+      // (typical when maxToolRounds is hit). Bill what was spent and treat
+      // this drafter as failed so the debate doesn't run on empty content.
+      totalCostCents += settlement.costCents
+      yield {
+        kind: 'draft_failed',
+        slot: settlement.slot,
+        model: settlement.model,
+        error: { kind: 'unknown', message: 'Empty content after tool rounds', raw: null },
       }
     } else {
       yield { kind: 'draft_failed', slot: settlement.slot, model: settlement.model, error: settlement.error }
@@ -650,11 +661,23 @@ export async function* runCouncilChat(
     const liveDebatesThisRound: DebateResult[] = []
 
     for (const settlement of settlements) {
-      if (settlement.kind === 'ok') {
+      if (settlement.kind === 'ok' && settlement.content.trim() !== '') {
         totalCostCents += settlement.costCents
         liveDebatesThisRound.push({ slot: settlement.slot, model: settlement.model, content: settlement.content, costCents: settlement.costCents })
         previousDebatePerSlot.set(settlement.slot, settlement.content)
         yield { kind: 'debate_done', round, slot: settlement.slot, model: settlement.model, content: settlement.content, costCents: settlement.costCents, durationMs: settlement.durationMs }
+      } else if (settlement.kind === 'ok') {
+        // Debater exhausted the tool budget without producing text. Bill what
+        // was spent but don't feed an empty position into the next round or
+        // the chairman.
+        totalCostCents += settlement.costCents
+        yield {
+          kind: 'debate_failed',
+          round,
+          slot: settlement.slot,
+          model: settlement.model,
+          error: { kind: 'unknown', message: 'Empty content after tool rounds', raw: null },
+        }
       } else {
         yield { kind: 'debate_failed', round, slot: settlement.slot, model: settlement.model, error: settlement.error }
       }

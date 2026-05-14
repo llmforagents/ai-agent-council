@@ -47,6 +47,23 @@ export interface ChatPort {
 const COUNCIL_STREAM_TIMEOUT_MS = 5 * 60 * 1000
 const COUNCIL_STREAM_IDLE_MS = 60 * 1000
 
+/**
+ * Create a fresh AbortSignal that mirrors an upstream signal but has its own
+ * controller. Used when starting a recovery fetch after a previous SDK call on
+ * the same upstream signal failed — avoids inheriting any aborted-state side
+ * effects from the abandoned underlying body stream.
+ */
+function mirrorSignal(upstream: AbortSignal | undefined): AbortSignal | undefined {
+  if (upstream === undefined) return undefined
+  const fresh = new AbortController()
+  if (upstream.aborted) {
+    fresh.abort()
+  } else {
+    upstream.addEventListener('abort', () => fresh.abort(), { once: true })
+  }
+  return fresh.signal
+}
+
 export function makeRestChatPort(rest: RestApiPort, key: ApiKey): ChatPort {
   return {
     async *completionStream({ model, messages, signal }) {
@@ -276,6 +293,7 @@ export async function* runCouncilChat(
     const t0 = Date.now()
     try {
       let final: { content: string; costCents: number } | null = null
+      let fallbackSignal: AbortSignal | undefined = signal
       if (useToolsInDrafts) {
         if (!deps.apiKey) {
           throw new Error('runCouncilChat: tools enabled but apiKey not provided in deps')
@@ -303,7 +321,12 @@ export async function* runCouncilChat(
           const err = e as { kind?: string }
           if (err.kind !== 'tool_subsystem') throw e
           // Tools failed at the MCP layer — fall through to the no-tools path.
-          // The drafter still produces an answer based on the model's prior knowledge.
+          // Use a fresh AbortController that mirrors the upstream signal so we
+          // don't inherit any aborted-state left by the failed SDK conversation.
+          fallbackSignal = mirrorSignal(signal)
+          // Let the SDK clean up the abandoned conversation's body stream before
+          // we start a new fetch on the same origin.
+          await Promise.resolve()
           final = null
         }
       }
@@ -311,7 +334,7 @@ export async function* runCouncilChat(
         const messages = buildDrafterMessages(userTask)
         final = await streamOne(
           chat,
-          signal !== undefined ? { model, messages, signal } : { model, messages },
+          fallbackSignal !== undefined ? { model, messages, signal: fallbackSignal } : { model, messages },
           (text) => {
             draftDeltaQueue.push({ slot, text })
           },
@@ -449,6 +472,7 @@ export async function* runCouncilChat(
       try {
         const others = anonymizeOthers(latestPerSlot, draft.slot)
         let final: { content: string; costCents: number } | null = null
+        let fallbackSignal: AbortSignal | undefined = signal
         if (useToolsInDebate) {
           if (!deps.apiKey) {
             throw new Error('runCouncilChat: tools enabled but apiKey not provided in deps')
@@ -517,7 +541,10 @@ export async function* runCouncilChat(
           } catch (e) {
             const err = e as { kind?: string }
             if (err.kind !== 'tool_subsystem') throw e
-            // Tools failed — fall back to no-tools path.
+            // Tools failed — fall back to no-tools path. Isolate the new fetch
+            // from any signal state left over from the failed SDK conversation.
+            fallbackSignal = mirrorSignal(signal)
+            await Promise.resolve()
             final = null
           }
         }
@@ -532,7 +559,7 @@ export async function* runCouncilChat(
           })
           final = await streamOne(
             chat,
-            signal !== undefined ? { model: draft.model, messages, signal } : { model: draft.model, messages },
+            fallbackSignal !== undefined ? { model: draft.model, messages, signal: fallbackSignal } : { model: draft.model, messages },
             (text) => {
               debateDeltaQueue.push({ round, slot: draft.slot, text })
             },
